@@ -84,7 +84,12 @@ These shaped the framework more than any individual locator did.
    before the buy button is tapped.
 6. **The episodes sheet is an animated bottom sheet.** When closed it sits at `y=839` with
    `pointer-events: none`; when open it sits at `y≈297`. Its open state is what to wait for.
-7. **Imperative state reads race the cross-origin payment iframe.** In one captured snapshot the card
+7. **A tap can be swallowed before hydration.** A CI trace showed a tap on a catalogue card
+   landing 0.1 s after the client-side route change and doing nothing: the element was visible,
+   stable and enabled, but its handler was not attached yet. The cards are `div`s with no href,
+   so nothing about them is interactive until the app wires them up, and no actionability check
+   can see that. The navigation intent is retried rather than waited on.
+8. **Imperative state reads race the cross-origin payment iframe.** In one captured snapshot the card
    number field reported `count() === 0` and `isEditable() === true` at the same moment. Only
    auto-retrying web-first assertions are sound against this iframe.
 
@@ -170,7 +175,52 @@ This is the second independent reason not to deep-link into this app; the first 
 Observed content: left column `ГРН 99`, "Auto-renews at ГРН 299 after 4 weeks"; right column
 `ГРН 55`, "Auto-renews at ГРН 165 after 2 weeks".
 
-The required "first Get Access" is the one inside the **left** column:
+### A second paywall design is live, and it is an experiment
+
+`paywall-f1` is not the only design. The vendor configuration behind it,
+`premium_modal_design_variant` from the GrowthBook SDK payload, reads:
+
+```
+countryCode = "US" and utmSource != "Applovin_w2w"
+  -> experiment "test-paywall-usa-not_sure"
+     variations ["f1_paywall", "not_sure"], weights [0.5, 0.5], hashAttribute "userId"
+
+countryCode != "US"
+  -> force "f1_paywall"
+```
+
+So outside the United States the design is fixed, and inside it is a 50/50 draw per user id.
+Every test creates a fresh account, so a US run draws again on every attempt - which is why CI
+needed retries and why a Ukrainian run never sees it.
+
+The second design's inventory was read from the DOM snapshot inside a CI trace, then reproduced
+locally by stubbing the GrowthBook payload so `premium_modal_design_variant` resolves to
+`not_sure` - the variant is decided in the browser, so overriding the payload is enough:
+
+| Element | Test id | Notes |
+| --- | --- | --- |
+| Root | `paywall-not-sure` | replaces `paywall-f1` |
+| Title | `paywall-not-sure-title` | "The next episode is always the one you can't put down." |
+| Eyebrow | `paywall-not-sure-eyebrow` | "Ready for more?" |
+| Plans section | `paywall-plans-section` | note: no `-f1` in this id |
+| Subscribe | `paywall-not-sure-subscribe-button` | 4-week plan |
+| Trial | `paywall-not-sure-trial-button` | 2-week plan |
+| Close | `paywall-not-sure-close-button` | |
+
+**There are no plan columns and no price node.** Both amounts sit inside the subscribe button:
+
+```
+<button data-testid="paywall-not-sure-subscribe-button">
+  <span>Subscribe</span>
+  <span><strong>ГРН 99</strong> today, then <strong>ГРН 299</strong> every 4 weeks</span>
+</button>
+```
+
+The first `strong` is the amount charged today and the one the checkout total must match; the
+second is the renewal. Verified end to end under the forced variant: paywall `ГРН 99` against
+checkout `Total today` `ГРН 99.00`, card field editable, Subscribe enabled.
+
+The required "first Get Access" in the `f1` design is the one inside the **left** column:
 
 ```
 getByTestId('paywall-f1-plan-column-left').getByTestId('paywall-f1-buy-button')

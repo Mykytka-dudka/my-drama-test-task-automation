@@ -257,6 +257,10 @@ The full list, with the evidence behind each, is in `NOTES.md`. In short:
 - **The checkout price rows are anchored on the English label `Total today`.** Those rows have no
   test ids, so a label anchor is the only option; a runner in a locale that changes the interface
   language would break it.
+- **The paywall has two live designs.** Outside the United States the vendor configuration
+  forces `f1_paywall`; inside it, a 50/50 experiment draws between `f1_paywall` and `not_sure`
+  per user id, so a fresh account draws again on every attempt. Both designs are modelled, so
+  the draw no longer decides whether a run passes.
 - **The settings flow is A/B-versioned**, and only `settingsFlowVersion: v5` was ever observed.
   It is the only observed flag that can change the account flow's step sequence; both affected
   screens name it in their failure messages rather than branching on an unseen variant.

@@ -303,7 +303,62 @@ was the first genuinely independent observation, and it immediately produced two
 serious than anything the reviews caught. Nothing here would have been found by more reviewing;
 it needed a different vantage point.
 
-### 1.16 Smaller corrections made in review rather than by a failure
+### 1.16 The retries were not flakiness - they were a coin flip in a live experiment
+
+The next CI run went green, but only through retries: 3 flaky, 1 clean. The tempting reading is
+"CI is just flaky, that is what `retries: 2` is for". Three separate causes were hiding under it,
+and only one of them was timing.
+
+**Cause 1 - a second paywall design, chosen by a 50/50 experiment.** The failure said
+`paywall never appeared`, and my own error message blamed the offerings request. It was wrong: the
+page snapshot showed a paywall, just a different one - "The next episode is always the one you
+can't put down." with a single `Subscribe $14.99 today, then $44.99 every 4 weeks` button instead
+of two plan columns.
+
+The vendor configuration is public, and it settles it exactly:
+
+```
+countryCode = "US" and utmSource != "Applovin_w2w"
+  -> experiment "test-paywall-usa-not_sure"
+     variations ["f1_paywall", "not_sure"], weights [0.5, 0.5], hashAttribute "userId"
+countryCode != "US"
+  -> force "f1_paywall"
+```
+
+Every test creates a fresh account, so a US run draws a fresh coin on every attempt. Two of three
+attempts failing, then passing, is precisely what a 50/50 draw with two retries looks like - and
+a Ukrainian run can never see it, because outside the US the design is forced.
+
+Both designs are now modelled. Locators for the second came from the DOM snapshot inside the CI
+trace, and were then verified live by stubbing the GrowthBook payload so the variant resolves to
+`not_sure` - it is decided in the browser, so overriding the payload is enough. Under the forced
+variant the whole flow was walked end to end: paywall `ГРН 99` against checkout
+`Total today ГРН 99.00`, card field editable, Subscribe enabled.
+
+**Cause 2 - a tap swallowed before hydration.** The trace timeline is unambiguous:
+
+```
+ 7.8s  page reaches /all-series
+ 7.9s  tap on the first catalogue card
+ 8.9s+ URL stays /all-series for the next 20s
+```
+
+The card is a `div` with no href, so until the app wires up its handler there is nothing to click.
+Playwright's actionability checks all passed - visible, stable, enabled, receives events - because
+none of them can see whether a listener exists. The fix retries the navigation intent with
+`expect(...).toPass()` rather than waiting harder afterwards, since waiting cannot fix a tap that
+was never heard.
+
+**Cause 3 - the payment provider's form was slower than its budget.** The checkout modal, the
+prices and the iframe element were all present; only the card field inside never rendered within
+45s. Budget raised, and the iframe's attachment is now asserted separately so the message
+distinguishes "the frame never arrived" from "the frame arrived empty".
+
+**The lesson.** "Flaky, add a retry" would have shipped all three. The trace and the vendor's own
+configuration turned a vague retry count into three specific, separately fixable causes - one of
+which was a product experiment the suite had no business being surprised by.
+
+### 1.17 Smaller corrections made in review rather than by a failure
 
 - **Exact URL matching was fragile.** The generated `expectPath` asserted
   `toHaveURL(exactString)`. The app emits its own links with a bare `?` appended (`/settings?`),
@@ -387,6 +442,8 @@ These are stated because they are real, not because they were hit.
   exercises the blocking one. The handler is armed either way.
 - **The content flow's e-mail gate moves between regions** - after the plan choice from Ukraine,
   before the paywall from the United States. Both orders are handled; only CI covers the second.
+- **The paywall has two live designs and the choice is a 50/50 draw in the United States.** Both
+  are modelled (see 1.16), but only CI ever exercises the second, and only about half the time.
 - **The settings flow is A/B-versioned and only v5 was ever seen.** `$abTestGroups` resolves to
   `{"settingsFlowVersion":"v5"}` on `/settings/manage-subscription`, and every locator on that
   screen and on `/settings` was captured under it. It is the only observed flag that can change
