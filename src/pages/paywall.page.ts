@@ -16,12 +16,19 @@ import { BasePage } from './base.page';
 export class PaywallPage extends BasePage {
   readonly root: Locator;
   private readonly firstPlanColumn: Locator;
+
+  /**
+   * Whichever of the two screens the content flow lands on first. Which one it is depends on the
+   * region, so the flow waits on the pair and then branches.
+   */
+  private readonly paywallOrLoginGate: Locator;
   readonly firstPlanPrice: Locator;
   readonly firstPlanBuyButton: Locator;
 
   constructor(page: Page) {
     super(page);
     this.root = page.getByTestId('paywall-f1');
+    this.paywallOrLoginGate = this.root.or(page.getByTestId('login-modal-container'));
     this.firstPlanColumn = page.getByTestId('paywall-f1-plan-column-left');
     this.firstPlanPrice = this.firstPlanColumn.getByTestId('paywall-f1-price');
     this.firstPlanBuyButton = this.firstPlanColumn.getByTestId('paywall-f1-buy-button');
@@ -46,6 +53,14 @@ export class PaywallPage extends BasePage {
       'the paywall shell rendered but its first plan never showed a price - the offerings ' +
         'request may have returned a partial or failed response',
     );
+  }
+
+  /** Waits until either the paywall or the e-mail gate is on screen, whichever this region shows. */
+  async expectOpenOrLoginPrompted(): Promise<void> {
+    await expect(
+      this.paywallOrLoginGate,
+      'tapping a locked episode opened neither the paywall nor the e-mail gate',
+    ).toBeVisible();
   }
 
   async tapFirstPlanBuyButton(): Promise<void> {

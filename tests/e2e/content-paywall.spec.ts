@@ -15,14 +15,18 @@ test('checkout reached from a locked episode shows the price the paywall adverti
   await app.episodeList.expectOpen();
   await app.episodeList.openFirstLockedEpisode();
 
-  // Anonymous users hit the paywall directly here; the e-mail gate only appears after the plan
-  // choice below, unlike the account flow where it comes first.
+  // The e-mail gate sits either side of the plan choice depending on the region: before the
+  // paywall from the United States, after it from Ukraine. Asking at both points keeps one spec
+  // valid for both, and each call is a no-op where the gate is not showing.
+  await app.paywall.expectOpenOrLoginPrompted();
+  await app.loginModal.signInIfPrompted(email);
+
   await app.paywall.expectOpen();
   const advertisedPrice = await app.paywall.readFirstPlanPrice();
   await app.paywall.tapFirstPlanBuyButton();
 
-  await app.loginModal.expectOpen();
-  await app.loginModal.signInWith(email);
+  await app.checkout.expectRenderedOrLoginPrompted();
+  await app.loginModal.signInIfPrompted(email);
 
   await expectCheckoutMatchesPaywall(app, advertisedPrice);
 });

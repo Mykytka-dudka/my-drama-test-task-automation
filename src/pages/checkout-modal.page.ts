@@ -24,6 +24,9 @@ export class CheckoutModalPage extends BasePage {
   readonly totalTodayValue: Locator;
   readonly subscribeButton: Locator;
 
+  /** Checkout, or the e-mail gate that precedes it in regions that ask for it after the plan. */
+  private readonly checkoutOrLoginGate: Locator;
+
   constructor(page: Page) {
     super(page);
     this.root = page.getByTestId('payment-modal-controller-container');
@@ -33,11 +36,20 @@ export class CheckoutModalPage extends BasePage {
       .getByText(TOTAL_TODAY_LABEL, { exact: true })
       .locator('xpath=following-sibling::*[1]');
     this.subscribeButton = page.getByTestId('payment-pay-button');
+    this.checkoutOrLoginGate = this.root.or(page.getByTestId('login-modal-container'));
   }
 
   async expectRendered(): Promise<void> {
     await expect(this.root, 'checkout modal never appeared').toBeVisible();
     await expect(this.title, 'checkout modal title never appeared').toBeVisible();
+  }
+
+  /** Waits until either checkout or the e-mail gate is on screen, whichever this region shows. */
+  async expectRenderedOrLoginPrompted(): Promise<void> {
+    await expect(
+      this.checkoutOrLoginGate,
+      'choosing a plan opened neither checkout nor the e-mail gate',
+    ).toBeVisible();
   }
 
   async readTotalTodayPrice(): Promise<Price> {
