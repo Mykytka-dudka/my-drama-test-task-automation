@@ -464,7 +464,28 @@ evidence-based rather than convenience-based:
 Everything else on a first-party `/api/` path fails the test, and the collected entries are attached
 to the report so the failure names the upstream cause instead of surfacing as a locator timeout.
 
-### Known upstream flake
+### Known upstream flake: login succeeds, the header does not update
+
+Observed on `mobile-safari` in CI. Reconstructed from the trace:
+
+```
+ 9.7s  POST identitytoolkit .../accounts:signUp        200   (anonymous user, on load)
+27.9s  tap on login-modal-submit-button
+30.1s  POST /api/v1/auth/upgrade-anonymous             200
+28.4s  waiting for header-avatar-link ... never appears (still absent at 48s)
+```
+
+The captured request body carried the correct address, so nothing was lost on the way in:
+
+```json
+{"email":"qa.auto.<...>@example.com","isEmailConsent":false,"timezone":"UTC", ...}
+```
+
+The login therefore completed and the UI did not reflect it - a real defect, not a test race. It
+is intermittent: the retry passed. The suite now waits on the login response before asserting the
+header, so a failure states which of the two happened.
+
+### Known upstream flake: the offerings request
 
 `GET /api/v1/catalog/offerings/my_drama_com_premium_f1_v1?provider=solid` intermittently returns
 404, and when it does the paywall modal spins forever with no error UI. It is not excluded by the

@@ -1,6 +1,7 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect } from '@playwright/test';
 
+import { LOGIN_UPGRADE_PATH } from '../config';
 import { BasePage } from './base.page';
 
 /**
@@ -28,9 +29,25 @@ export class LoginModalPage extends BasePage {
     await expect(this.container, 'login modal never opened').toBeVisible();
   }
 
+  /**
+   * Waits for the login request rather than only for the UI that should follow it. A CI run on
+   * WebKit showed this request carrying the right address and returning 200 while the header kept
+   * showing Sign In for the next 48 seconds - so proving the request succeeded is what lets the
+   * next assertion blame the UI instead of the login.
+   */
   async signInWith(email: string): Promise<void> {
     await this.emailInput.fill(email);
+
+    const upgraded = this.page.waitForResponse((response) =>
+      response.url().includes(LOGIN_UPGRADE_PATH),
+    );
     await this.submitButton.tap();
+    const response = await upgraded;
+
+    expect(
+      response.ok(),
+      `the login request failed with HTTP ${response.status()}`,
+    ).toBeTruthy();
   }
 
   /**

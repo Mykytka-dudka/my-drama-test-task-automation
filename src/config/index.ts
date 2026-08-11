@@ -2,6 +2,7 @@ export { BASE_URL, DEVICE_PROFILE_NAMES, deviceProfile } from './environment';
 export { TIMEOUTS } from './timeouts';
 export {
   IGNORED_REQUEST_FAILURE_REASONS,
+  LOGIN_UPGRADE_PATH,
   isFirstPartyApiUrl,
   isFirstPartyUrl,
   isIgnoredApiFailure,

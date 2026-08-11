@@ -18,6 +18,12 @@ const FIRST_PARTY_HOST_SUFFIXES: readonly string[] = ['my-drama.com'];
 const API_PATH_SEGMENT = '/api/';
 
 /**
+ * The request the e-mail login fires. Waiting on it lets a failure say whether the login itself
+ * failed or whether it succeeded and the UI never caught up - two different bugs.
+ */
+export const LOGIN_UPGRADE_PATH = '/api/v1/auth/upgrade-anonymous';
+
+/**
  * First-party API responses that fail on every run without affecting the product.
  *
  * `*_after_timer` offerings: observed 404 on 4 of 4 paywall openings, while the primary

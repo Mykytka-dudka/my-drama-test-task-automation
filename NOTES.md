@@ -358,7 +358,42 @@ distinguishes "the frame never arrived" from "the frame arrived empty".
 configuration turned a vague retry count into three specific, separately fixable causes - one of
 which was a product experiment the suite had no business being surprised by.
 
-### 1.17 Smaller corrections made in review rather than by a failure
+### 1.17 A failure that looked like a swallowed tap and was a product bug
+
+After the previous three fixes CI went from three flaky tests to one. The survivor failed with
+`login did not complete: header avatar link never appeared` on WebKit, and every instinct pointed
+at the hydration race just fixed next door - the submit was tapped 0.3s after the field was
+filled, on a modal that had existed for 1.4s.
+
+The trace says otherwise:
+
+```
+27.9s  tap on login-modal-submit-button
+30.1s  POST /api/v1/auth/upgrade-anonymous  ->  200
+28.4s  waiting for header-avatar-link ... never appears, still absent at 48s
+```
+
+and the captured request body carried the right address:
+
+```json
+{"email":"qa.auto.<...>@example.com","isEmailConsent":false, ...}
+```
+
+So the tap landed, the field's value reached the app, the server accepted the login, and the
+header kept offering Sign In. That is a product defect on WebKit, intermittent - the retry
+passed - and nothing the suite should paper over.
+
+**Correction:** none to the flow. `signInWith` now waits for the login response and asserts it
+succeeded, so the two possible failures are told apart: "the login request failed with HTTP x"
+versus "the login request succeeded but the header never replaced Sign In with the avatar". The
+second is now a sentence a reader can act on rather than a locator timeout to re-run.
+
+Worth noting how close this came to the wrong fix. The neighbouring bug was genuinely a tap
+swallowed before hydration, the symptom here rhymed with it, and adding a retry would have made
+the test green while hiding a real defect. The request body in the trace was the only thing that
+separated them.
+
+### 1.18 Smaller corrections made in review rather than by a failure
 
 - **Exact URL matching was fragile.** The generated `expectPath` asserted
   `toHaveURL(exactString)`. The app emits its own links with a bare `?` appended (`/settings?`),
@@ -442,6 +477,8 @@ These are stated because they are real, not because they were hit.
   exercises the blocking one. The handler is armed either way.
 - **The content flow's e-mail gate moves between regions** - after the plan choice from Ukraine,
   before the paywall from the United States. Both orders are handled; only CI covers the second.
+- **Login can succeed while the header stays signed out** on WebKit (see 1.17). Intermittent,
+  upstream, and reported rather than retried around.
 - **The paywall has two live designs and the choice is a 50/50 draw in the United States.** Both
   are modelled (see 1.16), but only CI ever exercises the second, and only about half the time.
 - **The settings flow is A/B-versioned and only v5 was ever seen.** `$abTestGroups` resolves to
