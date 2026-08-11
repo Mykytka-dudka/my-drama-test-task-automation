@@ -13,6 +13,30 @@ Both specs stop at the checkout form. Nothing in this repository completes a pur
 **Mobile web only.** Every test runs under mobile device emulation on both projects. There is no
 desktop project and no desktop assertion.
 
+## What this repository submits
+
+The assignment asks for two things:
+
+> In the repo add a short note: your prompts, where the AI-generated test was wrong or flaky, and
+> what you corrected manually.
+
+> What to submit: a link to a repository (GitHub / GitLab, etc.) with the Playwright autotest code
+> and that note.
+
+- **The Playwright autotest code** is this repository — two specs under `tests/e2e/`, driven
+  through the page objects, fixtures and configuration under `src/`.
+- **The note** is [`NOTES.md`](NOTES.md). It reproduces the prompts used (lightly redacted, as
+  stated at the top of that file), then works through each place the AI-generated or AI-reasoned
+  work turned out wrong, fragile or flaky, and what was corrected by hand and why. Every entry
+  names the specific observation behind it — a trace timeline, a vendor configuration file, a
+  measured node count — rather than describing the process in general terms.
+
+A third document, [`docs/exploration-notes.md`](docs/exploration-notes.md), is the evidence the
+suite was built from: the verified locator inventory, how many nodes each test id resolves to, the
+two flow sequences step by step, and the regional behaviour discovered along the way. It is not
+required by the assignment; it exists because no locator was committed here that had not first
+been observed in a live browser.
+
 ## Stack
 
 - [Playwright Test](https://playwright.dev/) driving Chromium and WebKit under device emulation
@@ -56,7 +80,7 @@ BASE_URL=https://my-drama.com npm test
 src/
   pages/        one class per screen, plus base.page.ts and page-factory.ts
   components/   components shared across screens (header, cookie consent)
-  fixtures/     the app and consoleGuard fixtures, and the guard itself
+  fixtures/     the app, consoleGuard and consentGuard fixtures, and the guard itself
   config/       base URL, device profiles, timeouts, network-guard policy
   utils/        pure helpers: test e-mail generation, price parsing
 tests/
@@ -69,10 +93,8 @@ docs/
 `testMatch` is `**/*.@(spec|test).?(c|m)[jt]s?(x)`, which this filename does not match, so it is
 never picked up as a test file. Naming it `*.test.ts` would be.
 
-`docs/exploration-notes.md` records what was observed in a live browser session: every locator
-used here, how many nodes each test id resolves to, the two flow sequences step by step, and the
-behavioural traps behind several of the decisions below. `NOTES.md` records how the suite was
-built with AI assistance, what the AI got wrong, and what was corrected.
+The two documents introduced above sit alongside the code: `docs/exploration-notes.md` for what
+was observed, `NOTES.md` for how the suite was built and corrected.
 
 ## Architecture decisions
 
@@ -110,6 +132,11 @@ this.firstPlanBuyButton = this.firstPlanColumn.getByTestId('paywall-f1-buy-butto
 
 A page-wide `getByTestId(...).first()` would be a defect, not a workaround.
 
+The paywall has **two live designs**, and which one appears is decided by a running experiment —
+see the risk list below. `PaywallPage` models both: the `f1` design with its two plan columns, and
+the `not_sure` design, which has no plan columns and no price node at all, both amounts sitting
+inside its subscribe button.
+
 Where a repeating element carries a semantic state attribute, that attribute is the
 disambiguator rather than an index: locked episodes are selected through `data-is-locked`, which
 is what removes the index guesswork - the suite never needs to know which episode number a series
@@ -117,10 +144,11 @@ stops being free at. It does still assume that a freemium serial puts its paid e
 it taps the final group tab before looking for a locked episode; that assumption is listed as a
 residual risk in `NOTES.md`.
 
-**No CSS class is ever used as an anchor.** The app is Tailwind-only, so its class tokens describe
-appearance and change whenever the design does. The one third-party exception is the CookieYes
-widget, which carries no test ids at all; it is anchored on `data-cky-tag`, a stable semantic
-attribute the vendor emits, and the exception is called out in the component's docblock.
+**No CSS class is ever used as an anchor in the app's own markup.** It is Tailwind-only, so its
+class tokens describe appearance and change whenever the design does. The one exception is the
+third-party CookieYes widget, which carries no test ids at all: its controls are anchored on
+`data-cky-tag`, a stable semantic attribute the vendor emits, and its overlay on `.cky-overlay`,
+because that element offers no other handle. Both are called out in the component's docblock.
 
 What that widget is was established from CookieYes's own targeting configuration rather than
 assumed: 52 rules, one banner, covering the 51 US states and Ukraine, and **no EU country at all**
@@ -191,16 +219,28 @@ the options bag and as the second argument respectively.
 No fixed sleeps and no `waitForLoadState('networkidle')`. There is exactly one `catch` in the
 repository - `safeHostname` in `src/config/network-guard.ts`, where a non-URL console location is
 not first-party API traffic and treating it as third-party is correct - and it carries a comment
-saying so. Every wait
-is a state wait, and every assertion is web-first and carries an explicit failure message.
+saying so.
 
 The episodes sheet is the interesting case. It is always present in the DOM with a non-empty
 bounding box, and when closed it sits exactly at the bottom edge of the viewport — entirely
 off-screen but still "visible" to Playwright. `toBeVisible()` therefore cannot tell open from
 closed, and the suite asserts `toBeInViewport({ ratio: 0.5 })` instead.
 
-Where an element may legitimately be absent, the code branches explicitly on `isVisible()` rather
-than catching a timeout — see `CookieConsentComponent.dismissIfPresent()`.
+Two waits are not assertions, because the thing being waited on is not a rendered state:
+
+- **A tap that nothing is listening to.** Catalogue cards are `div`s with no href, so until the
+  app attaches a handler there is nothing to click — and a trace showed a tap landing 0.1s after a
+  client-side route change and being swallowed. Every actionability check passed, because none of
+  them can see whether a listener exists. Waiting longer cannot fix a tap that was never heard, so
+  `CatalogPage.openFirstSeries()` retries the navigation intent with `expect(...).toPass()`.
+- **A login whose UI never catches up.** `LoginModalPage.signInWith()` waits for the login request
+  and asserts it succeeded before the header is checked, so a failure states whether the login
+  failed or whether it succeeded and the header stayed signed out — two different bugs that look
+  identical from the header alone.
+
+Where an element may legitimately be absent, the code branches on an explicitly settled state
+rather than catching a timeout — see `signInIfPrompted()`, which runs only after a wait on
+"paywall or login gate, whichever arrives".
 
 ### The suite never completes a purchase
 
@@ -276,6 +316,10 @@ The full list, with the evidence behind each, is in `NOTES.md`. In short:
 - **`parsePrice` misreads the five three-decimal currencies** (KWD, BHD, OMR, TND, JOD), and it
   compares currency tokens for exact equality. Neither matters while both sides of the comparison
   come from the same page load in the same locale; both are recorded in `NOTES.md`.
+- **Login can succeed while the header stays signed out.** Observed once on WebKit in CI: the
+  submit landed, the request carried the right address, the API returned 200, and the header kept
+  offering Sign In for the next 48 seconds. Upstream, intermittent, and reported rather than
+  retried around.
 - **The offerings API intermittently 404s** and leaves the paywall spinning with no error UI. It
   arrives in windows: one stretch of roughly twenty minutes hit about 7 of 18 paywall openings,
   while controlled probes and the validation gate either side of it produced 24 of 24 clean. This

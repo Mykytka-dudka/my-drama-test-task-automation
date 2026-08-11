@@ -1,7 +1,15 @@
 # NOTES
 
-How this suite was built with AI assistance, what the AI got wrong, and what had to be
-corrected by hand.
+This is the note the assignment asks for:
+
+> In the repo add a short note: your prompts, where the AI-generated test was wrong or flaky, and
+> what you corrected manually.
+
+So: section 1 is where the AI-generated or AI-reasoned work was wrong, fragile or flaky, and what
+was corrected by hand; section 2 lists what is still a known risk; the appendix reproduces the
+prompts. It is longer than "short" because each entry carries the evidence that produced it — a
+trace timeline, a vendor configuration file, a measured node count — and a claim about a live
+production site is worth less without it.
 
 **Redaction note.** The prompts reproduced in the appendix were lightly redacted: absolute
 local paths were replaced with `<repo>`, and machine- and account-specific details were
@@ -231,8 +239,12 @@ Personal Information" link — so it never blocks a run, and `optout-cancel-butt
 correct dismiss control for the only dialog that exists. The race in point two is immaterial for
 the same reason: nothing auto-opens.
 
-**Correction:** the component keeps `dismissIfPresent()` on the verified locator, and its docblock
-now records what is actually configured instead of what a CookieYes deployment usually looks like.
+**Correction (superseded — see 1.15).** At this point the component kept `dismissIfPresent()` on
+the verified locator, with a docblock recording what is actually configured rather than what a
+CookieYes deployment usually looks like. The one-shot check survived here and was replaced later,
+once CI showed the widget doing from the United States exactly what the reviewer had warned it
+might do.
+
 The lesson is symmetrical with 1.10 — a confident, well-argued diagnosis from a capable reviewer
 deserves the same fifteen-minute experiment as a confident, well-argued diagnosis of my own.
 
