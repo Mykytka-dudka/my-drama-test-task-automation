@@ -25,11 +25,10 @@ The assignment asks for two things:
 
 - **The Playwright autotest code** is this repository — two specs under `tests/e2e/`, driven
   through the page objects, fixtures and configuration under `src/`.
-- **The note** is [`NOTES.md`](NOTES.md). It reproduces the prompts used (lightly redacted, as
-  stated at the top of that file), then works through each place the AI-generated or AI-reasoned
-  work turned out wrong, fragile or flaky, and what was corrected by hand and why. Every entry
-  names the specific observation behind it — a trace timeline, a vendor configuration file, a
-  measured node count — rather than describing the process in general terms.
+- **The note** is [`NOTES.md`](NOTES.md): the prompts used, where the AI-generated work turned
+  out wrong or flaky, and what was corrected by hand. The full log behind it — every finding with
+  the trace timeline, vendor configuration or measurement that produced it, and the prompts
+  reproduced in full — is in [`docs/ai-log.md`](docs/ai-log.md).
 
 A third document, [`docs/exploration-notes.md`](docs/exploration-notes.md), is the evidence the
 suite was built from: the verified locator inventory, how many nodes each test id resolves to, the
@@ -87,14 +86,16 @@ tests/
   e2e/          the two spec files, plus the shared checkout assertion helper
 docs/
   exploration-notes.md   verified locator inventory and variant reconnaissance
+  ai-log.md              the full log behind NOTES.md, and the prompts
 ```
 
 `tests/e2e/checkout-integrity.ts` is a shared assertion helper, not a spec. Playwright's default
 `testMatch` is `**/*.@(spec|test).?(c|m)[jt]s?(x)`, which this filename does not match, so it is
 never picked up as a test file. Naming it `*.test.ts` would be.
 
-The two documents introduced above sit alongside the code: `docs/exploration-notes.md` for what
-was observed, `NOTES.md` for how the suite was built and corrected.
+The documents introduced above sit alongside the code: `docs/exploration-notes.md` for what was
+observed, `NOTES.md` for how the suite was built and corrected, `docs/ai-log.md` for the evidence
+behind it.
 
 ## Architecture decisions
 
