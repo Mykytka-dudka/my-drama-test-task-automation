@@ -257,7 +257,53 @@ simply times out.
 until the total settles and still compares currency and amount as separate fields. Cost when the
 price is right: nothing. Cost when it is genuinely wrong: the expect timeout before failing.
 
-### 1.15 Smaller corrections made in review rather than by a failure
+### 1.15 CI found the two things three review rounds and every local run could not
+
+The suite was green locally on both browsers across three consecutive runs, had survived three
+adversarial review rounds, and failed on the very first CI run. Both failures were regional, and
+neither is reachable from the machine the suite was written on.
+
+**The consent overlay blocks everything from the United States.** The runner's first tap died on:
+
+```
+<div class="cky-overlay"></div> intercepts pointer events
+```
+
+Measured: the overlay is 412x839 — the full viewport — at `z-index: 99999999` with
+`pointer-events: auto`. From Ukraine the same widget stays hidden and nothing is ever blocked.
+
+This one is worth dwelling on, because I had the evidence and reasoned past it. I read CookieYes's
+targeting configuration myself and wrote down that it covers "the 51 US states and Ukraine". Then,
+because the widget never appeared from Ukraine, I concluded it "never blocks a run" and wrote that
+into three documents. The 51 US rules were the whole answer and I treated them as trivia. Worse,
+the round-one reviewer had flagged precisely this — that a one-shot `isVisible()` immediately after
+`goto` races a third-party script that injects its banner asynchronously — and I dismissed it as
+immaterial *on the grounds that nothing auto-opens*, which was an observation about Ukraine
+generalised into a claim about everywhere.
+
+**Correction:** the dismissal is now armed with `page.addLocatorHandler` before the first
+navigation, which is Playwright's tool for exactly this shape — an overlay that may appear at any
+time, on any screen, and blocks actions. It fires when the overlay actually blocks something, so
+there is no race to lose and no cost where the widget never shows. Verified against the real
+blocking overlay, reproduced locally by stubbing the vendor's geolocation endpoint with a US
+payload: overlay up, handler fires, overlay gone, flow proceeds.
+
+**The content flow's e-mail gate moves between regions.** From Ukraine, tapping a locked episode
+opens the paywall and the login modal appears only after a plan is chosen. From the United States
+the login modal opens *first*. The CI failure snapshot shows the episode sheet correctly on the
+final group and a `Sign in` dialog where the spec expected `paywall-f1`.
+
+**Correction:** the flow waits on `paywall-f1` **or** `login-modal-container` via Playwright's
+`locator.or()`, then signs in only if the gate is the screen that arrived — at both points where
+it can appear. One spec, both orders, no branching on region and no `try/catch`.
+
+**What this says about the process.** Three review rounds are worth having — they found real
+defects — but every one of them read the same repository from the same country. The first CI run
+was the first genuinely independent observation, and it immediately produced two findings more
+serious than anything the reviews caught. Nothing here would have been found by more reviewing;
+it needed a different vantage point.
+
+### 1.16 Smaller corrections made in review rather than by a failure
 
 - **Exact URL matching was fragile.** The generated `expectPath` asserted
   `toHaveURL(exactString)`. The app emits its own links with a bare `?` appended (`/settings?`),
@@ -336,9 +382,11 @@ These are stated because they are real, not because they were hit.
   with `content-lang=en` and the site served English from a Ukrainian IP, but a runner in a
   locale that changes the interface language would break this anchor. There is no test id on
   those rows, so a label anchor is the only option available.
-- **The cookie-consent dismissal path is unexercised.** This site configures no consent notice
-  for any EU country, and its one CCPA dialog never opens by itself (see 1.13), so the branch has
-  never fired, and it is only checked on the initial navigation, not on every screen.
+- **The consent overlay is regional.** It blocks every interaction from the United States and
+  never appears from Ukraine (see 1.15), so a local run exercises the quiet path and only CI
+  exercises the blocking one. The handler is armed either way.
+- **The content flow's e-mail gate moves between regions** - after the plan choice from Ukraine,
+  before the paywall from the United States. Both orders are handled; only CI covers the second.
 - **The settings flow is A/B-versioned and only v5 was ever seen.** `$abTestGroups` resolves to
   `{"settingsFlowVersion":"v5"}` on `/settings/manage-subscription`, and every locator on that
   screen and on `/settings` was captured under it. It is the only observed flag that can change
@@ -379,6 +427,8 @@ These are stated because they are real, not because they were hit.
   each run creates real accounts on production.
 - `.github/workflows/e2e.yml` validated by parsing it; every command in it was run locally except
   `playwright install --with-deps`, which is Linux-only.
+- The first CI run, from a US-based runner, failed on two regional variants that no local run
+  or review round could reach; both are fixed and described in 1.15.
 - Three adversarial review rounds, each by a fresh reviewer with no prior context. Round 1
   returned three majors, round 2 two majors, round 3 one major; all were fixed or, in the one
   case where the reviewer's premise turned out to be wrong about this site, resolved by

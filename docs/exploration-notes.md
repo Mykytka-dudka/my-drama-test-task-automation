@@ -303,6 +303,9 @@ Mapped from scratch. The e-mail gate is **not** at the start of this flow.
 5. Tap the last `episodes-group-button`, then the first `[data-is-locked="true"]` episode in the
    grid.
 6. `paywall-f1` opens **directly, with no e-mail gate** - the user is still anonymous here.
+   **This ordering is region-dependent.** From a US address the login modal opens *first*,
+   before the paywall, observed on a CI runner. The flow therefore waits on `paywall-f1` or
+   `login-modal-container`, whichever arrives, and signs in only if the gate is the one showing.
 7. Read the left column price, then tap the left column `paywall-f1-buy-button`.
 8. **The login modal appears at this point**, after the plan choice. Fill the e-mail and submit.
 9. `payment-modal-controller-container` opens, with structure and price rows identical to Flow A.
@@ -330,11 +333,25 @@ That was confirmed experimentally. Stubbing CookieYes's own geolocation endpoint
 and clearing the site's own `cookieyes-consent` cookie rendered **no widget at all**: no
 `.cky-consent-container`, no `data-cky-tag` elements anywhere.
 
-### The one widget that exists
+### The US case: it blocks everything
 
-The CCPA "Opt-out Preferences" dialog, at `.cky-modal` / `#ckyPreferenceCenter`. From a Ukrainian
-IP it is fully populated but hidden (`visibility: hidden`), and it only opens when the user
-follows the "Do Not Sell or Share My Personal Information" link. It never blocks a run.
+The CCPA "Opt-out Preferences" dialog, at `.cky-modal` / `#ckyPreferenceCenter`.
+
+**From a Ukrainian IP** it is fully populated but hidden (`visibility: hidden`) and only opens via
+the "Do Not Sell or Share My Personal Information" link, so it never interferes.
+
+**From a US IP it opens on load and blocks the entire page.** Reproduced locally by stubbing the
+geolocation endpoint with a US payload, and observed for real on a CI runner:
+
+| Element | Measured |
+| --- | --- |
+| `.cky-overlay` | 412x839 - the full viewport - `pointer-events: auto`, `z-index: 99999999` |
+| `.cky-modal` / `#ckyPreferenceCenter` | visible at `y=142`, 412x556 |
+| `[data-cky-tag="optout-cancel-button"]` | visible, labelled "Cancel" |
+
+Every interaction fails with `<div class="cky-overlay"></div> intercepts pointer events` until it
+is dismissed. Tapping the Cancel control removes the overlay and the page becomes interactive
+again - verified by driving the account flow's opening steps straight through it.
 
 All 16 `data-cky-tag` elements in the DOM belong to it:
 
@@ -351,9 +368,10 @@ notice being configured.
 Note also that my-drama.com sets its own `cookieyes-consent` cookie server-side (observed with
 both `consent:no` and `consent:yes`), which independently suppresses the widget.
 
-The framework keeps a `dismissIfPresent()` safety net on the verified `optout-cancel-button`: one
-visibility check on the initial navigation, tapping only if the dialog is genuinely open. Given the above it
-should never fire, and it costs nothing if it does not.
+The widget is injected asynchronously by a third-party script, so a one-shot check after
+navigation loses the race. The framework therefore arms `page.addLocatorHandler` on the overlay
+before the first navigation: the handler fires whenever the overlay actually blocks an action, on
+any screen, however late it appears, and costs nothing where the widget never shows.
 
 No app-redirect interstitial and no app-store smart banner exist on mobile web - verified absent.
 

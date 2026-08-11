@@ -124,13 +124,16 @@ attribute the vendor emits, and the exception is called out in the component's d
 
 What that widget is was established from CookieYes's own targeting configuration rather than
 assumed: 52 rules, one banner, covering the 51 US states and Ukraine, and **no EU country at all**
-— so this site has no GDPR accept/reject notice. Stubbing CookieYes's geolocation endpoint with an
-EU payload confirmed it, rendering no widget whatsoever. The only widget that exists is the CCPA
-"Opt-out Preferences" dialog, which is hidden on load and opens only via the "Do Not Sell or Share
-My Personal Information" link, so it never blocks a run. `dismissIfPresent()` remains as a cheap
-safety net: one visibility check on the initial navigation, tapping only if the dialog is
-genuinely open. Later screens are reached by tapping rather than navigating, so they are not
-re-checked.
+— so this site has no GDPR accept/reject notice, which stubbing the vendor's geolocation endpoint
+with an EU payload confirmed.
+
+The CCPA "Opt-out Preferences" dialog it does deploy behaves very differently by region. From
+Ukraine it stays hidden. **From the United States it opens on load and blocks the whole page** —
+`.cky-overlay` covers the viewport at `z-index: 99999999`, and every tap fails with "intercepts
+pointer events". Because a third-party script injects it asynchronously, a one-shot check after
+navigation loses the race. The suite arms `page.addLocatorHandler` on the overlay before the first
+navigation, so the dismissal fires whenever the overlay actually blocks an action, on any screen
+and however late it appears.
 
 The checkout price rows have no test ids either. They are reached by anchoring on the stable
 label text and traversing structurally to the sibling that holds the value:
@@ -257,9 +260,12 @@ The full list, with the evidence behind each, is in `NOTES.md`. In short:
 - **The settings flow is A/B-versioned**, and only `settingsFlowVersion: v5` was ever observed.
   It is the only observed flag that can change the account flow's step sequence; both affected
   screens name it in their failure messages rather than branching on an unseen variant.
-- **The cookie-consent dismissal path is unexercised**, because this site configures no consent
-  notice for any EU country and its one CCPA dialog never opens by itself. The component checks
-  visibility and does nothing when the dialog is absent, which is every run so far.
+- **The consent overlay is region-dependent.** It blocks every interaction from the United States
+  and never appears from Ukraine, so a local run exercises the quiet path and CI exercises the
+  blocking one.
+- **The content flow's e-mail gate moves.** It comes after the plan choice from Ukraine and before
+  the paywall from the United States. The spec waits on whichever screen arrives and signs in only
+  when the gate is the one showing.
 - **The locked-episode step assumes paid episodes come last**, since it taps the final episode
   group before looking for one. It holds for a freemium serial and fails with a message saying the
   series may be fully unlocked if it ever stops holding.
