@@ -1,7 +1,7 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect } from '@playwright/test';
 
-import { CookieConsentComponent, HeaderComponent } from '../components';
+import { HeaderComponent } from '../components';
 import { BASE_URL } from '../config';
 import type { Price } from '../utils';
 import { parsePrice } from '../utils';
@@ -15,16 +15,13 @@ export abstract class BasePage {
   protected readonly baseURL: string = BASE_URL;
 
   readonly header: HeaderComponent;
-  readonly cookieConsent: CookieConsentComponent;
 
   constructor(protected readonly page: Page) {
     this.header = new HeaderComponent(page);
-    this.cookieConsent = new CookieConsentComponent(page);
   }
 
   async open(path: string): Promise<void> {
     await this.page.goto(new URL(path, this.baseURL).toString());
-    await this.cookieConsent.dismissIfPresent();
   }
 
   /**

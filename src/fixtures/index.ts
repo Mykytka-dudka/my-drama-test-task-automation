@@ -1,5 +1,6 @@
 import { test as base, expect } from '@playwright/test';
 
+import { CookieConsentComponent } from '../components';
 import { PageFactory } from '../pages/page-factory';
 import { FirstPartyGuard } from './first-party-guard';
 
@@ -11,12 +12,27 @@ interface AppFixtures {
    * Applies to every test automatically, so no spec ever registers a page listener itself.
    */
   consoleGuard: void;
+
+  /**
+   * Arms the consent-overlay dismissal before the first navigation. Automatic, because a run
+   * from a region where the overlay shows cannot perform a single tap until it is handled.
+   */
+  consentGuard: void;
 }
 
 export const test = base.extend<AppFixtures>({
   app: async ({ page }, use) => {
     await use(new PageFactory(page));
   },
+
+  consentGuard: [
+    async ({ page }, use) => {
+      await new CookieConsentComponent(page).armAutoDismiss();
+
+      await use();
+    },
+    { auto: true },
+  ],
 
   consoleGuard: [
     async ({ page }, use, testInfo) => {

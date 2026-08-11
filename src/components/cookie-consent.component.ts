@@ -2,34 +2,38 @@ import type { Locator, Page } from '@playwright/test';
 
 /**
  * The CookieYes consent widget. It carries no test ids, so it is the one documented exception to
- * the `data-testid` rule, and it is anchored on `data-cky-tag` - a stable semantic attribute the
- * vendor emits - never on a CSS class.
+ * the `data-testid` rule; its controls are anchored on `data-cky-tag`, a stable semantic attribute
+ * the vendor emits, and only the overlay is anchored on a class, because that element has no
+ * other handle.
  *
- * What this site actually deploys was read from CookieYes's own targeting configuration rather
- * than assumed: 52 rules, all pointing at a single banner, covering exactly two countries - the
- * 51 US states plus Ukraine (`regionName IS 'EU' AND countryName IS 'UA'`). **No EU country is
- * configured**, so there is no GDPR accept/reject notice on this site at all; forcing an EU
- * geolocation renders no widget whatsoever, and the notice container stays empty.
+ * What is deployed here was read from CookieYes's own targeting configuration: 52 rules, one
+ * banner, covering the 51 US states and Ukraine, with no EU country at all - so there is no GDPR
+ * accept/reject notice, and forcing an EU geolocation renders no widget.
  *
- * The one widget that does exist is the CCPA "Opt-out Preferences" dialog, which is hidden on
- * load and only opens when the user follows the "Do Not Sell or Share My Personal Information"
- * link. It therefore never blocks a run that does not go looking for it.
+ * **From a US address the CCPA "Opt-out Preferences" dialog opens on load and blocks the page.**
+ * Its `.cky-overlay` covers the full viewport at `z-index: 99999999` with `pointer-events: auto`,
+ * so every tap fails with "intercepts pointer events" until it is dismissed. From a Ukrainian
+ * address the same widget stays hidden. Both states were observed live, the US one by stubbing
+ * CookieYes's geolocation endpoint.
  *
- * `dismissIfPresent` is kept as a cheap safety net for the case where a future configuration
- * change starts showing it on load: one visibility check on the initial navigation, and a tap
- * only if the dialog is genuinely open. It is not re-checked on later screens, which are reached
- * by tapping rather than navigating.
+ * The widget is injected asynchronously by a third-party script, so a one-shot check after
+ * navigation loses the race - which is exactly how this reached CI. `addLocatorHandler` is
+ * Playwright's tool for this shape of problem: the handler fires whenever the overlay actually
+ * blocks an action, on any screen, however late it appears.
  */
 export class CookieConsentComponent {
+  private readonly overlay: Locator;
   private readonly dismissButton: Locator;
 
-  constructor(page: Page) {
+  constructor(private readonly page: Page) {
+    this.overlay = page.locator('.cky-overlay');
     this.dismissButton = page.locator('[data-cky-tag="optout-cancel-button"]');
   }
 
-  async dismissIfPresent(): Promise<void> {
-    if (await this.dismissButton.isVisible()) {
+  /** Must be armed before the first navigation. Costs nothing where the widget never shows. */
+  async armAutoDismiss(): Promise<void> {
+    await this.page.addLocatorHandler(this.overlay, async () => {
       await this.dismissButton.tap();
-    }
+    });
   }
 }
