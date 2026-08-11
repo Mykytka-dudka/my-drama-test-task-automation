@@ -461,8 +461,10 @@ evidence-based rather than convenience-based:
 2. **Requests aborted by navigation** (`net::ERR_ABORTED`, observed on
    `GET /api/v1/continue-watching`) are cancellations, not server failures.
 
-Everything else on a first-party `/api/` path fails the test, and the collected entries are attached
-to the report so the failure names the upstream cause instead of surfacing as a locator timeout.
+Everything else on a first-party `/api/` path is collected and attached to the report. **None of
+it fails a test.** The guard reports and the steps decide: a request that genuinely gates a step
+is asserted by that step, which is where the cause can actually be named. The reasoning, and the
+three false failures that produced it, are in README and NOTES.
 
 ### Known upstream flake: login succeeds, the header does not update
 
@@ -488,9 +490,11 @@ header, so a failure states which of the two happened.
 ### Known upstream flake: the offerings request
 
 `GET /api/v1/catalog/offerings/my_drama_com_premium_f1_v1?provider=solid` intermittently returns
-404, and when it does the paywall modal spins forever with no error UI. It is not excluded by the
-rule above: it fails the test, with a message that names the offerings request rather than the
-missing locator.
+404. Sometimes the paywall modal then spins forever with no error UI; sometimes the app recovers,
+because it requests that offering more than once per session. Only the first case is a failure,
+and it surfaces where it belongs - `PaywallPage.expectOpen()`, whose message names the offerings
+request rather than the missing locator. A recovered 404 leaves the run green and appears only in
+the attached diagnostics.
 
 Measured behaviour, because the shape of it matters:
 

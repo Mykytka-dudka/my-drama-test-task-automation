@@ -211,10 +211,11 @@ construction.
 
 ### Waiting
 
-Every locator assertion is web-first and carries an explicit failure message. The two
-value-level assertions - the settled price comparison in `tests/e2e/checkout-integrity.ts` and
-the guard's teardown check - use `expect.poll` and a plain `expect`, which take their message in
-the options bag and as the second argument respectively.
+Every locator assertion is web-first and carries an explicit failure message. Two assertions are
+value-level rather than locator-level, and both still carry one: the settled price comparison in
+`tests/e2e/checkout-integrity.ts`, which uses `expect.poll` and takes its message in the options
+bag, and the login response check in `LoginModalPage.signInWith()`, which takes it as the second
+argument.
 
 No fixed sleeps and no `waitForLoadState('networkidle')`. There is exactly one `catch` in the
 repository - `safeHostname` in `src/config/network-guard.ts`, where a non-URL console location is
@@ -249,12 +250,11 @@ it alone. No code in this repository taps it or fills a card field.
 
 ## Console and network guard
 
-`consoleGuard` — named for the fixture, though its only failing condition is network, not console
-— is an automatic fixture in `src/fixtures/index.ts`, so it applies to every test
-and no spec ever registers a page listener itself. Its policy lives in
+`consoleGuard` is an automatic fixture in `src/fixtures/index.ts`, so it applies to every test
+and no spec ever registers a page listener itself. Its classification policy lives in
 `src/config/network-guard.ts`.
 
-The treatment of third-party and first-party traffic is deliberately asymmetric.
+It is a reporting tool, not a gate.
 
 **Third-party noise is ignored entirely.** It is real and constant here: a single home page load
 reliably produces an ad pixel failing DNS resolution and a 403 from an id-sync pixel, and the
@@ -264,29 +264,31 @@ The filter is an allowlist of first-party host suffixes rather than a blocklist 
 analytics hosts, because the set of third parties on a production page changes without notice
 while the set of first-party hosts does not.
 
-**First-party API failures fail the test.** A failing offerings request is precisely what leaves
-the paywall on an infinite spinner with no error UI, so filtering 4xx responses out as "just a
-4xx" would hide the most likely real defect behind a locator timeout. When the guard fires it
-names the failed request, and the collected entries are attached to the HTML report.
+**First-party traffic is collected and reported, and decides nothing.** Every first-party API
+failure, first-party console error and uncaught page error is gathered and attached to the HTML
+report as `first-party-diagnostics`. None of them fails a test.
 
-Two exclusions are carved out, both from measurement rather than convenience:
+That is a deliberate reversal. The guard originally failed a test on any failed first-party
+`/api/` response, on the reasoning that a failing offerings request is what leaves the paywall
+spinning forever. Measurement did not support it:
 
-- `GET /api/v1/catalog/offerings/{offering}_after_timer` returned 404 on **every** observed
-  paywall opening, while the primary offering returned 200 in the same page load and the paywall
-  rendered correctly. It is a probe for an offering that does not exist. Without this exclusion
-  the suite would be red on every run while describing nothing real.
-- Requests cancelled because a navigation superseded them. Chromium reports these as
-  `net::ERR_ABORTED` and WebKit as `cancelled`; both spellings are needed, and this was found by
-  running both projects, not by review. A genuine server failure arrives as a response with a
-  status code, not as a cancelled request, so excluding cancellations hides nothing.
+- the `*_after_timer` offerings probe 404s on **every** paywall opening while the flow is fine;
+- WebKit reports navigation-cancelled requests as `cancelled`, which turned a healthy run red;
+- and finally the primary offerings call returned 404 while the paywall rendered, the price
+  matched and checkout showed its card form — a completed, fully asserted journey marked as
+  failed. The app requests that endpoint more than once per session and recovers.
 
-The **primary** offerings request is deliberately not excluded. It has been observed returning
-404 with the paywall spinning forever, and the suite reports it.
+A failed request is not a failed journey, and a suite that cannot tell the difference trains
+people to ignore it. Three false reds in as many days is a design answer, not bad luck.
 
-**What the guard collects but does not fail on:** first-party console errors and uncaught page
-errors. They are attached to the report for diagnosis. Uncaught exceptions carry no reliable
-origin — a third-party script's throw looks identical to the app's own — so failing on them would
-reintroduce exactly the third-party noise the guard exists to filter out.
+**Where a request genuinely gates a step, the step asserts it.** `PaywallPage.expectOpen()` names
+the offerings endpoint in its own failure message, so a paywall that really does hang still fails
+with the cause spelled out — and the attachment sits next to it as evidence. That keeps the
+diagnostic value, which was the point, without letting backend noise decide whether a user
+journey passed.
+
+Backend health belongs to monitoring owned by the teams that own those services, not to a
+checkout test in someone else's pipeline.
 
 ## Known variant and flake risks
 
@@ -323,9 +325,9 @@ The full list, with the evidence behind each, is in `NOTES.md`. In short:
 - **The offerings API intermittently 404s** and leaves the paywall spinning with no error UI. It
   arrives in windows: one stretch of roughly twenty minutes hit about 7 of 18 paywall openings,
   while controlled probes and the validation gate either side of it produced 24 of 24 clean. This
-  is an upstream defect, not a test defect; it is reported rather than worked around, and CI runs
-  with `retries: 2`. A local run has no retries by design, so a run that lands inside such a
-  window will go red — and the report will name the failing request rather than a locator.
+  is an upstream defect, not a test defect. When it actually stops the paywall from rendering the
+  test fails at `expectOpen()`, whose message names the endpoint; when the app recovers from it,
+  the run stays green and the 404 appears only in the attached diagnostics.
 - **Do not deep-link into the app.** `/video/<uuid>` renders an entirely different page with no
   test ids, and a direct `page.goto` to the subscriptions screen intermittently duplicates the
   Get Full Access button. Both flows navigate through the UI for this reason.

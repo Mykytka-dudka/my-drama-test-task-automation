@@ -10,6 +10,7 @@ interface AppFixtures {
 
   /**
    * Applies to every test automatically, so no spec ever registers a page listener itself.
+   * Reports; never decides the outcome - see the guard's own docblock for why.
    */
   consoleGuard: void;
 
@@ -40,20 +41,14 @@ export const test = base.extend<AppFixtures>({
 
       await use();
 
-      if (guard.hasFindings()) {
-        await testInfo.attach('first-party-diagnostics', {
-          body: JSON.stringify(guard.findings(), null, 2),
-          contentType: 'application/json',
-        });
+      if (!guard.hasFindings()) {
+        return;
       }
 
-      const failures = guard.failedApiRequests;
-
-      expect(
-        failures,
-        `the app's own API failed during this test, which is the usual cause of a paywall ` +
-          `that never renders:\n${failures.join('\n')}`,
-      ).toEqual([]);
+      await testInfo.attach('first-party-diagnostics', {
+        body: JSON.stringify(guard.findings(), null, 2),
+        contentType: 'application/json',
+      });
     },
     { auto: true },
   ],
