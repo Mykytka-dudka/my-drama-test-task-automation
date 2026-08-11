@@ -47,11 +47,13 @@ export class CheckoutCardFormPage extends BasePage {
    */
   async expectCardFieldsEditable(): Promise<void> {
     // Asserted separately so a failure says whether the provider's frame never arrived or
-    // whether it arrived and stayed empty - two very different upstream problems.
+    // whether it arrived and stayed empty - two very different upstream problems. It carries the
+    // same budget as the field below: splitting the assertion must not shorten the wait, and with
+    // the default timeout here it did, failing a WebKit run whose frame simply arrived late.
     await expect(
       this.frameElement,
       'the payment provider iframe was never attached to the checkout modal',
-    ).toBeAttached();
+    ).toBeAttached({ timeout: TIMEOUTS.paymentFrame });
 
     await expect(
       this.cardNumberField,
