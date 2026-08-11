@@ -437,7 +437,37 @@ was that a 404 there leaves the paywall spinning forever; the measurement says i
 and sometimes does not, and only the former is worth a red build. A suite that cries wolf three
 times in three days teaches people to ignore it, which costs more than the diagnosis was worth.
 
-### 1.19 Smaller corrections made in review rather than by a failure
+### 1.19 A 40-run repeat measured the flakiness, and a third of it was mine
+
+Running each test ten times gave 18 failures out of 40, and the guard's attachments made the
+attribution exact rather than a guess:
+
+| Failures | Cause |
+| --- | --- |
+| 12 | the offerings request 404'd; every one of these carried it in `first-party-diagnostics` |
+| 6 | `page.waitForResponse` hung until the 180-second test timeout |
+
+The first group is the upstream defect, and the run happened to land inside one of its windows.
+The second group was a regression I had introduced two changes earlier, when `signInWith` started
+waiting for the login request in order to tell "the login failed" apart from "the login succeeded
+and the UI ignored it".
+
+Two things were wrong with it. `waitForResponse` resolves on a **response**, so a request that
+fails at the network level never resolves it at all. And Playwright Test leaves the action timeout
+unset in this project, so the wait had no budget of its own and burned the entire test timeout -
+three minutes per occurrence, which is most of why the run took 16.5 minutes.
+
+**Correction:** `signInWith` is back to filling and tapping. The distinction it was buying is
+already in the report: the guard collects failed first-party API calls, so a failed
+`upgrade-anonymous` appears in `first-party-diagnostics` next to the failure. The header assertion
+now points the reader there instead of asserting the network itself.
+
+The general shape is worth keeping in mind: a wait on a network event is a wait on something that
+may never happen, and it is only as safe as its timeout. The equivalent wait on rendered state
+fails in twenty seconds with a message; this one failed in three minutes with a stack trace inside
+Playwright.
+
+### 1.20 Smaller corrections made in review rather than by a failure
 
 - **Exact URL matching was fragile.** The generated `expectPath` asserted
   `toHaveURL(exactString)`. The app emits its own links with a bare `?` appended (`/settings?`),

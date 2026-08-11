@@ -26,8 +26,9 @@ export class HeaderComponent {
   async expectSignedIn(): Promise<void> {
     await expect(
       this.avatarLink,
-      'the login request succeeded but the header never replaced Sign In with the avatar - the ' +
-        'app did not reflect a completed login (observed on WebKit, see NOTES.md)',
+      'login never completed: the header still offers Sign In. Check the first-party-diagnostics ' +
+        'attachment - if it shows no failed auth request, the login succeeded and the app simply ' +
+        'did not reflect it, which has been observed on WebKit (see NOTES.md)',
     ).toBeVisible();
   }
 }
