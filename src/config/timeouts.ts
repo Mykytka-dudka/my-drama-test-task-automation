@@ -16,5 +16,11 @@ export const TIMEOUTS = {
    * The payment provider's cross-origin form loads noticeably later than the host modal
    * around it, so its fields get their own, longer budget.
    */
-  paymentFrame: 45_000,
+  paymentFrame: 75_000,
+
+  /**
+   * How long a single tap is given to produce a navigation before it is repeated. Short on
+   * purpose: it bounds one attempt, not the step, which has its own budget.
+   */
+  hydrationRetry: 4_000,
 } as const;

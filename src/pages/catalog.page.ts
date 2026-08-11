@@ -1,6 +1,7 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect } from '@playwright/test';
 
+import { TIMEOUTS } from '../config';
 import { BasePage } from './base.page';
 
 /**
@@ -31,10 +32,19 @@ export class CatalogPage extends BasePage {
     await expect(this.grid, 'catalogue grid never became visible').toBeVisible();
   }
 
+  /**
+   * The card is a `div` with no href, so its handler is attached by hydration rather than by the
+   * browser. A CI trace showed a tap landing 0.1s after the client-side route change and being
+   * swallowed - visible, stable and enabled, but with nothing listening yet, which no
+   * actionability check can detect. The tap is therefore retried as part of the navigation
+   * intent rather than waited on afterwards.
+   */
   async openFirstSeries(): Promise<void> {
-    await this.firstSeriesCard.tap();
-    await expect(this.page, 'tapping the first catalogue card did not open a series').toHaveURL(
-      /\/video\//,
-    );
+    await expect(async () => {
+      await this.firstSeriesCard.tap();
+      await expect(this.page).toHaveURL(/\/video\//, { timeout: TIMEOUTS.hydrationRetry });
+    }, 'tapping the first catalogue card never opened a series').toPass({
+      timeout: TIMEOUTS.navigation,
+    });
   }
 }

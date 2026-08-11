@@ -14,7 +14,11 @@ import { BasePage } from './base.page';
  * There are no test ids inside the iframe; fields are located by their accessible name instead.
  * The suite never fills these fields and never submits payment - see `expectCardFieldsEditable`.
  */
+/** The provider's iframe, reached through the test-id container rather than its own element id. */
+const PAYMENT_FRAME = '[data-testid="payment-form-container"] iframe';
+
 export class CheckoutCardFormPage extends BasePage {
+  private readonly frameElement: Locator;
   readonly frame: FrameLocator;
   readonly cardNumberField: Locator;
   readonly expiryField: Locator;
@@ -22,7 +26,8 @@ export class CheckoutCardFormPage extends BasePage {
 
   constructor(page: Page) {
     super(page);
-    this.frame = page.frameLocator('[data-testid="payment-form-container"] iframe');
+    this.frameElement = page.locator(PAYMENT_FRAME);
+    this.frame = page.frameLocator(PAYMENT_FRAME);
     this.cardNumberField = this.frame.getByRole('textbox', { name: 'Credit Card Number' });
     this.expiryField = this.frame.getByRole('textbox', { name: 'Expiration Date' });
     this.cvvField = this.frame.getByRole('textbox', { name: 'CVV' });
@@ -41,7 +46,17 @@ export class CheckoutCardFormPage extends BasePage {
    * web-first assertions are sound here; do not replace them with imperative checks.
    */
   async expectCardFieldsEditable(): Promise<void> {
-    await expect(this.cardNumberField, 'card number field never became visible').toBeVisible({
+    // Asserted separately so a failure says whether the provider's frame never arrived or
+    // whether it arrived and stayed empty - two very different upstream problems.
+    await expect(
+      this.frameElement,
+      'the payment provider iframe was never attached to the checkout modal',
+    ).toBeAttached();
+
+    await expect(
+      this.cardNumberField,
+      "card number field never rendered inside the payment provider's iframe",
+    ).toBeVisible({
       timeout: TIMEOUTS.paymentFrame,
     });
     await expect(this.cardNumberField, 'card number field never became editable').toBeEditable();
