@@ -1,0 +1,14 @@
+node_modules/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+.env
+
+# Scratch output written by the Playwright MCP server during locator exploration.
+.playwright-mcp/
+
+.idea/
+.claude/
+.mcp.json
+.DS_Store
